@@ -1,20 +1,30 @@
-import "reflect-metadata";
-import { MikroORM } from "@mikro-orm/core";
-import { COOKIE_NAME, FOO_COOKIE_SECRET, __prod__ } from "./constant";
-import microConfig from "./mikro-orm.config";
-import express from "express";
 import { ApolloServer } from "apollo-server-express";
+import connectMongo from "connect-mongo";
+import cors from "cors";
+import express from "express";
+import session from "express-session";
+import "reflect-metadata";
 import { buildSchema } from "type-graphql";
+import { createConnection } from "typeorm";
+import { COOKIE_NAME, FOO_COOKIE_SECRET, __prod__ } from "./constant";
+import { Post } from "./entities/Post";
+import { User } from "./entities/User";
 import { HelloResolver } from "./resolvers/hello";
 import { PostResolver } from "./resolvers/posts";
 import { UserResolver } from "./resolvers/user";
-import session from "express-session";
-import connectMongo from "connect-mongo";
-import cors from "cors";
 
 const main = async () => {
-  const orm = await MikroORM.init(microConfig);
-  orm.getMigrator().up();
+  const conn = await createConnection({
+    type: "postgres",
+    database: "liredditDB",
+    username: "postgres",
+    password: "postgres",
+    logging: true,
+    synchronize: true, // create tables automatically
+    entities: [User, Post],
+  });
+
+  await conn.runMigrations();
   // express
   const app = express();
   // session middleware will run before the apollo middleware
@@ -50,7 +60,6 @@ const main = async () => {
     context: ({ req, res }) => ({
       req,
       res,
-      em: orm.em,
     }),
   });
 
