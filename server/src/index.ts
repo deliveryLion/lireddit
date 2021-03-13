@@ -9,6 +9,7 @@ import { createConnection } from "typeorm";
 import { COOKIE_NAME, FOO_COOKIE_SECRET, __prod__ } from "./constant";
 import { Post } from "./entities/Post";
 import { User } from "./entities/User";
+import { getMongoClient } from "./utils/getMongoClient";
 import { HelloResolver } from "./resolvers/hello";
 import { PostResolver } from "./resolvers/posts";
 import { UserResolver } from "./resolvers/user";
@@ -23,6 +24,7 @@ const main = async () => {
     synchronize: true, // create tables automatically
     entities: [User, Post],
   });
+  const mongoClient = await getMongoClient();
 
   await conn.runMigrations();
   // express
@@ -60,6 +62,7 @@ const main = async () => {
     context: ({ req, res }) => ({
       req,
       res,
+      mongoClient,
     }),
   });
 

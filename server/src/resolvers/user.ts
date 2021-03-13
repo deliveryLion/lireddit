@@ -10,19 +10,123 @@ import {
   Root,
 } from "type-graphql";
 import { getConnection } from "typeorm";
-import { COOKIE_NAME } from "../constant";
+import { v4 } from "uuid";
+import {
+  COOKIE_NAME,
+  FORGOT_PASSWORD_PREFIX,
+  MONGO_DB_NAME,
+  MONGO_DB_PASSWORD_COLLECTION,
+} from "../constant";
 import { User } from "../entities/User";
 import { MyContext } from "../types";
+import { sendEmail } from "../utils/sendEmail";
 import { UsernamePasswordInput } from "./UsernamePasswordInput";
 import { UserPasswordArgument } from "./UserPasswordArgument";
 import { UserResponse } from "./UserResponse";
 
 @Resolver(User)
 export class UserResolver {
+  @Mutation(() => UserResponse)
+  async changePassword(
+    @Arg("token") token: string,
+    @Arg("newPassword") newPassword: string,
+    @Ctx() { mongoClient, req }: MyContext,
+  ): Promise<UserResponse> {
+    if (newPassword.length <= 2) {
+      return {
+        errors: [
+          {
+            field: "password",
+            message: "length must be greater than 2",
+          },
+        ],
+      };
+    }
+
+    const key = FORGOT_PASSWORD_PREFIX + token;
+    const { _id: userId } = await mongoClient
+      .db(MONGO_DB_NAME)
+      .collection(MONGO_DB_PASSWORD_COLLECTION)
+      .findOne({ token: key });
+
+    if (!userId) {
+      return {
+        errors: [
+          {
+            field: "token",
+            message: "token expired",
+          },
+        ],
+      };
+    }
+
+    const userIdNumber = parseInt(userId);
+    const user = await User.findOne(userIdNumber);
+    if (!user) {
+      return {
+        errors: [
+          {
+            field: "token",
+            message: "user no longer exists",
+          },
+        ],
+      };
+    }
+
+    await User.update(
+      { id: userIdNumber },
+      {
+        password: await argon2.hash(newPassword),
+      },
+    );
+
+    await mongoClient
+      .db(MONGO_DB_NAME)
+      .collection(MONGO_DB_PASSWORD_COLLECTION)
+      .deleteOne({
+        token: key,
+      });
+
+    req.session.userId = user.id;
+
+    return { user };
+  }
+
   @Mutation(() => Boolean)
-  async forgotPassword(@Arg("email") email: string) {
-    const user = User.findOne({ where: { email } });
-    // todo: complete this later
+  async forgotPassword(
+    @Arg("email") email: string,
+    @Ctx() { mongoClient }: MyContext,
+  ) {
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      // the email is not in the db.
+      return true;
+    }
+    const token = v4();
+
+    await mongoClient
+      .db(MONGO_DB_NAME)
+      .collection(MONGO_DB_PASSWORD_COLLECTION)
+      .replaceOne(
+        {
+          // filter
+          _id: user.id,
+        },
+        {
+          // replacement document
+          _id: user.id,
+          token: FORGOT_PASSWORD_PREFIX + token,
+        },
+        {
+          // replace or create
+          upsert: true,
+        },
+      );
+
+    await sendEmail(
+      email,
+      `<a href="http://localhost:3000/change-password/${token}">reset password</a>`,
+    );
     return true;
   }
 

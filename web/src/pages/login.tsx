@@ -10,9 +10,7 @@ import { NavBar } from "../components/NavBar";
 import { createUrqlClient } from "../utils/createUrqlClient";
 import { withUrqlClient } from "next-urql";
 
-interface loginProps {}
-
-const Login: React.FC<loginProps> = ({}) => {
+const Login: React.FC<{}> = ({}) => {
   const [, login] = useLoginMutation();
   const router = useRouter();
   return (
@@ -20,7 +18,7 @@ const Login: React.FC<loginProps> = ({}) => {
       <NavBar />
       <Wrapper>
         <Formik
-          initialValues={{ username: "", password: "" }}
+          initialValues={{ usernameOrEmail: "", password: "" }}
           onSubmit={async (values, { setErrors }) => {
             // username/password lines up with the mutation variables
             const response = await login(values);
@@ -35,9 +33,9 @@ const Login: React.FC<loginProps> = ({}) => {
           {({ isSubmitting }) => (
             <Form>
               <InputField
-                name="username"
-                placeholder="username"
-                label="Username"
+                name="usernameOrEmail"
+                placeholder="Username or Email"
+                label="UsernameOrEmail"
               />
               <Box mt={4}>
                 <InputField
